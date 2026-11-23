@@ -152,6 +152,38 @@ class Tree {
   get(p: string): string | null {
     return this.now.has(p) ? this.now.get(p)! : this.original(p);
   }
+  /** A path that is a directory in the tree as the edits leave it: one on disk
+   * (nothing removes directories, so it will still be one when the writes run),
+   * or one an earlier edit made by creating a file under it. Creating a file
+   * there must fail with `exists` (SPEC section 2), not crash the write
+   * (EISDIR on writeFileSync). */
+  isDir(p: string): boolean {
+    try {
+      if (statSync(p).isDirectory()) return true;
+    } catch { /* not on disk */ }
+    const prefix = `${p}/`;
+    for (const [k, v] of this.now) {
+      if (v !== null && k.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+  /** A path one of whose proper ancestors is a file in the tree as the edits
+   * leave it (on disk, or created by an earlier edit). Creating a file there
+   * must fail with `exists`, not crash the write (ENOTDIR on mkdirSync). */
+  blockedByFile(p: string): boolean {
+    const parts = p.split('/');
+    let q = '';
+    for (let i = 0; i < parts.length - 1; i += 1) {
+      q = q === '' ? parts[i]! : `${q}/${parts[i]!}`;
+      if (this.get(q) !== null) return true;
+    }
+    return false;
+  }
+  /** A create/move target that cannot be written: it is a directory, or one of
+   * its ancestors is a file. */
+  createBlocked(p: string): boolean {
+    return this.isDir(p) || this.blockedByFile(p);
+  }
 }
 
 type Edit = (tree: Tree) => void;
@@ -183,7 +215,7 @@ function jsonEdit(v: unknown): Edit | null {
     const text = o.file_text;
     return (tree) => {
       if (!safe(p)) throw new Fail('unsafe', p);
-      if (tree.get(p) !== null) throw new Fail('exists', p);
+      if (tree.get(p) !== null || tree.createBlocked(p)) throw new Fail('exists', p);
       tree.now.set(p, text);
     };
   }
@@ -299,7 +331,7 @@ function applyUniSection(sec: UniSection, tree: Tree, strict: boolean): void {
   if (sec.create || oldP === null) {
     const target = newP ?? oldP;
     if (target === null) return;
-    if (tree.get(target) !== null) throw new Fail('exists', target);
+    if (tree.get(target) !== null || tree.createBlocked(target)) throw new Fail('exists', target);
     const plus: string[] = [];
     for (const h of sec.hunks) for (const op of h.ops) if (op.kind === 'add') plus.push(op.text);
     let noEol = false;
@@ -323,7 +355,7 @@ function applyUniSection(sec: UniSection, tree: Tree, strict: boolean): void {
   if (oldP !== null && newP !== null && oldP !== newP) {
     const before = tree.get(oldP);
     if (before === null) throw new Fail('missing', oldP);
-    if (tree.get(newP) !== null) throw new Fail('exists', newP);
+    if (tree.get(newP) !== null || tree.createBlocked(newP)) throw new Fail('exists', newP);
     const result = applyHunks(before, sec.hunks, strict, oldP);
     tree.now.set(oldP, null);
     tree.now.set(newP, result);
@@ -546,7 +578,7 @@ function searchReplaceEdits(lines: string[], strict: boolean): Edit[] {
   return blocks.map((b) => (tree: Tree) => {
     if (!safe(b.path)) throw new Fail('unsafe', b.path);
     if (b.oldLines.length === 0) {
-      if (tree.get(b.path) !== null) throw new Fail('exists', b.path);
+      if (tree.get(b.path) !== null || tree.createBlocked(b.path)) throw new Fail('exists', b.path);
       tree.now.set(b.path, b.newLines.length === 0 ? '' : `${b.newLines.join('\n')}\n`);
       return;
     }
@@ -683,7 +715,7 @@ function v4aEdits(lines: string[], strict: boolean): Edit[] {
   return sections.map((sec) => (tree: Tree) => {
     if (!safe(sec.path)) throw new Fail('unsafe', sec.path);
     if (sec.kind === 'add') {
-      if (tree.get(sec.path) !== null) throw new Fail('exists', sec.path);
+      if (tree.get(sec.path) !== null || tree.createBlocked(sec.path)) throw new Fail('exists', sec.path);
       tree.now.set(sec.path, sec.addLines.length === 0 ? '' : `${sec.addLines.join('\n')}\n`);
       return;
     }
@@ -695,7 +727,7 @@ function v4aEdits(lines: string[], strict: boolean): Edit[] {
     if (sec.moveTo !== null && !safe(sec.moveTo)) throw new Fail('unsafe', sec.moveTo);
     const before = tree.get(sec.path);
     if (before === null) throw new Fail('missing', sec.path);
-    if (sec.moveTo !== null && tree.get(sec.moveTo) !== null) throw new Fail('exists', sec.moveTo);
+    if (sec.moveTo !== null && (tree.get(sec.moveTo) !== null || tree.createBlocked(sec.moveTo))) throw new Fail('exists', sec.moveTo);
     const f = splitFile(before);
     let cursor = 0;
     for (const ch of sec.chunks) {

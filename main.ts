@@ -304,7 +304,7 @@ interface DiffSec {
   remove: boolean;
   hunks: DiffHunk[];
   /** Set once a `---`/`+++` pair has supplied the paths; only then do rename from/to lines stop naming them (SPEC section 6). */
-  pairSet: boolean;
+  pairNamed: boolean;
 }
 
 const hunkAt = (line: string): number | null => {
@@ -414,7 +414,7 @@ function parseUnified(lines: string[], strict: boolean): PatchEdit[] {
     if (line.startsWith('diff --git ')) {
       const m = /^diff --git a\/(\S+) b\/(\S+)$/.exec(line);
       if (!m) throw new ParseExit(`error: parse ${i + 1}`);
-      cur = { oldPath: m[1]!, newPath: m[2]!, create: false, remove: false, hunks: [], pairSet: false };
+      cur = { oldPath: m[1]!, newPath: m[2]!, create: false, remove: false, hunks: [], pairNamed: false };
       sections.push(cur);
       inHeader = true;
       i += 1;
@@ -431,12 +431,12 @@ function parseUnified(lines: string[], strict: boolean): PatchEdit[] {
       // the one right after a diff --git line) is its header pair, and a
       // later pair before the first hunk begins a fresh section instead
       // of replacing the paths.
-      if (cur !== null && inHeader && !cur.pairSet) {
+      if (cur !== null && inHeader && !cur.pairNamed) {
         cur.oldPath = oldP;
         cur.newPath = newP;
-        cur.pairSet = true;
+        cur.pairNamed = true;
       } else {
-        cur = { oldPath: oldP, newPath: newP, create: false, remove: false, hunks: [], pairSet: true };
+        cur = { oldPath: oldP, newPath: newP, create: false, remove: false, hunks: [], pairNamed: true };
         sections.push(cur);
         inHeader = true;
       }
@@ -501,12 +501,12 @@ function parseUnified(lines: string[], strict: boolean): PatchEdit[] {
         continue;
       }
       if (line.startsWith('rename from ')) {
-        if (!cur.pairSet) cur.oldPath = line.slice(12).trim();
+        if (!cur.pairNamed) cur.oldPath = line.slice(12).trim();
         i += 1;
         continue;
       }
       if (line.startsWith('rename to ')) {
-        if (!cur.pairSet) cur.newPath = line.slice(10).trim();
+        if (!cur.pairNamed) cur.newPath = line.slice(10).trim();
         i += 1;
         continue;
       }

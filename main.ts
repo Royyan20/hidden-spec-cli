@@ -228,7 +228,9 @@ function sniffFormat(lines: string[]): string | null {
   const c = lines[first]!.trimStart()[0];
   if (c === '[' || c === '{') return 'json';
   if (lines.some((l) => l.trimEnd() === '<<<<<<< SEARCH')) return 'search-replace';
-  if (lines.some((l, i) => l.startsWith('diff --git ') || (l.startsWith('--- ') && (lines[i + 1] ?? '').startsWith('+++ ')))) return 'unified';
+  const hasGit = lines.some((l) => l.startsWith('diff --git '));
+  const hasPair = lines.some((l, i) => l.startsWith('--- ') && (lines[i + 1] ?? '').startsWith('+++ '));
+  if (hasGit || hasPair) return 'unified';
   return null;
 }
 
@@ -252,7 +254,8 @@ function jsonOne(v: unknown): PatchEdit | null {
       tree.now.set(p, text);
     };
   }
-  if (o.command === 'str_replace' && typeof o.old_str === 'string' && o.old_str !== '' && (o.new_str === undefined || typeof o.new_str === 'string')) {
+  const newOk = o.new_str === undefined || typeof o.new_str === 'string';
+  if (o.command === 'str_replace' && typeof o.old_str === 'string' && o.old_str !== '' && newOk) {
     const oldStr = o.old_str;
     const newStr = (o.new_str as string | undefined) ?? '';
     return (tree) => {
@@ -832,8 +835,11 @@ function execute(args: string[]): { code: number; out: string[] } {
   for (const a of args) {
     if (!ended && a === '--') ended = true;
     else if (!ended && a.startsWith('-') && a !== '-') {
-      if (a.startsWith('--format=') && format === null && FORMATS.includes(a.slice(9))) format = a.slice(9);
-      else if (a === '--check' && !check) check = true;
+      if (a.startsWith('--format=') && format === null) {
+        const f = a.slice(9);
+        if (FORMATS.includes(f)) format = f;
+        else return { code: 2, out: ['error: usage'] };
+      } else if (a === '--check' && !check) check = true;
       else if (a === '--strict' && !strict) strict = true;
       else return { code: 2, out: ['error: usage'] };
     } else pos.push(a);

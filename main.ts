@@ -238,6 +238,8 @@ interface UniSection {
   create: boolean;
   remove: boolean;
   hunks: Hunk[];
+  /** True once a `---`/`+++` pair has named the paths (SPEC section 6: rename from/to name them only when no pair does). */
+  pairSet: boolean;
 }
 
 const hunkHead = (line: string): number | null => {
@@ -347,7 +349,7 @@ function unifiedEdits(lines: string[], strict: boolean): Edit[] {
     if (line.startsWith('diff --git ')) {
       const m = /^diff --git a\/(\S+) b\/(\S+)$/.exec(line);
       if (!m) throw new Exit2(`error: parse ${i + 1}`);
-      cur = { oldPath: m[1]!, newPath: m[2]!, create: false, remove: false, hunks: [] };
+      cur = { oldPath: m[1]!, newPath: m[2]!, create: false, remove: false, hunks: [], pairSet: false };
       sections.push(cur);
       inHeader = true;
       i += 1;
@@ -358,11 +360,17 @@ function unifiedEdits(lines: string[], strict: boolean): Edit[] {
       const newRaw = headPath(lines[i + 1]!);
       const oldP = oldRaw === '/dev/null' ? null : stripAB(oldRaw);
       const newP = newRaw === '/dev/null' ? null : stripAB(newRaw);
-      if (cur !== null && inHeader) {
+      // A pair names the paths only while the current section has no pair yet
+      // (SPEC section 6: a section starts at a ---/+++ pair "not already part of
+      // a section's header"; the pair that opened the section, or the pair after
+      // a diff --git line, is its header's pair — a further pair before the first
+      // hunk starts a new section instead of overwriting the paths).
+      if (cur !== null && inHeader && !cur.pairSet) {
         cur.oldPath = oldP;
         cur.newPath = newP;
+        cur.pairSet = true;
       } else {
-        cur = { oldPath: oldP, newPath: newP, create: false, remove: false, hunks: [] };
+        cur = { oldPath: oldP, newPath: newP, create: false, remove: false, hunks: [], pairSet: true };
         sections.push(cur);
         inHeader = true;
       }
@@ -427,12 +435,12 @@ function unifiedEdits(lines: string[], strict: boolean): Edit[] {
         continue;
       }
       if (line.startsWith('rename from ')) {
-        cur.oldPath = line.slice(12).trim();
+        if (!cur.pairSet) cur.oldPath = line.slice(12).trim();
         i += 1;
         continue;
       }
       if (line.startsWith('rename to ')) {
-        cur.newPath = line.slice(10).trim();
+        if (!cur.pairSet) cur.newPath = line.slice(10).trim();
         i += 1;
         continue;
       }

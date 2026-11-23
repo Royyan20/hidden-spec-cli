@@ -94,7 +94,7 @@ function pickTier(o: string[], f: string[], strict: boolean, from: number): numb
   return -1;
 }
 
-/** One line of a hunk or chunk: context, removed, or added. */
+/** A single line inside a hunk or chunk — context, removed, or added. */
 type LineOp = { kind: 'ctx' | 'del' | 'add'; text: string };
 function oldSide(ops: LineOp[]): string[] {
   return ops.filter((o) => o.kind !== 'add').map((o) => o.text);
@@ -134,11 +134,11 @@ function spliceOps(f: string[], at: number, ops: LineOp[], tier: number): string
   return out;
 }
 
-/** The tree as the edits leave it: changed paths in `now` (null: deleted), the rest read from disk. */
+/** The working tree: paths this patch changed live in `now` (null means deleted); everything else comes from disk. */
 class WorkTree {
   private readonly orig = new Map<string, string | null>();
   readonly now = new Map<string, string | null>();
-  /** Successful moves, in order: [old path, new path]. */
+  /** Moves that succeeded, in the order they happened: [old path, new path]. */
   readonly moves: Array<[string, string]> = [];
   original(p: string): string | null {
     if (!this.orig.has(p)) {
@@ -232,7 +232,7 @@ function sniffFormat(lines: string[]): string | null {
   return null;
 }
 
-/** One JSON edit object (SPEC.md section 9), or null when it is not one. */
+/** A single JSON edit object per SPEC.md section 9; null when the value is not one. */
 function jsonOne(v: unknown): PatchEdit | null {
   if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
   const o = v as Record<string, unknown>;
@@ -289,7 +289,7 @@ function jsonOne(v: unknown): PatchEdit | null {
   return null;
 }
 
-/** One hunk of a unified section (SPEC section 6). */
+/** A single hunk belonging to a unified section (SPEC section 6). */
 interface DiffHunk {
   a: number;
   ops: LineOp[];
@@ -319,7 +319,7 @@ const hdrPath = (line: string): string => {
 };
 const dropAB = (p: string): string => (p.startsWith('a/') || p.startsWith('b/') ? p.slice(2) : p);
 
-/** Apply a section's hunks, in order, to a file's text (SPEC section 6). */
+/** Run a section's hunks over a file's text, in order (SPEC section 6). */
 function runHunks(before: string, hunks: DiffHunk[], strict: boolean, path: string): string {
   const f = splitDoc(before);
   let d = 0;
@@ -355,7 +355,7 @@ function runHunks(before: string, hunks: DiffHunk[], strict: boolean, path: stri
   return joinDoc(f);
 }
 
-/** One unified section as one edit (SPEC section 6). */
+/** A unified section, treated as one edit (SPEC section 6). */
 function applySection(sec: DiffSec, tree: WorkTree, strict: boolean): void {
   const oldP = sec.oldPath;
   const newP = sec.newPath;
@@ -402,7 +402,7 @@ function applySection(sec: DiffSec, tree: WorkTree, strict: boolean): void {
   tree.now.set(p, runHunks(before, sec.hunks, strict, p));
 }
 
-/** Read a unified diff patch into edits (SPEC section 6). */
+/** Turn a unified diff patch into edits (SPEC section 6). */
 function parseUnified(lines: string[], strict: boolean): PatchEdit[] {
   const sections: DiffSec[] = [];
   const n = lines.length;
@@ -561,7 +561,7 @@ function parseJson(text: string, lines: string[]): PatchEdit[] {
   return edits;
 }
 
-/** Read a SEARCH/REPLACE patch into edits (SPEC section 7). */
+/** Turn a SEARCH/REPLACE patch into edits (SPEC section 7). */
 function parseSearchReplace(lines: string[], strict: boolean): PatchEdit[] {
   const n = lines.length;
   const blocks: { path: string; oldLines: string[]; newLines: string[] }[] = [];
@@ -632,7 +632,7 @@ function parseSearchReplace(lines: string[], strict: boolean): PatchEdit[] {
   });
 }
 
-/** One chunk of a V4A Update File section (SPEC section 8). */
+/** A single chunk inside a V4A Update File section (SPEC section 8). */
 interface V4Chunk {
   anchor: string | null;
   ops: LineOp[];
@@ -647,7 +647,7 @@ interface V4Sec {
   chunks: V4Chunk[];
 }
 
-/** Read a V4A patch into edits (SPEC section 8). */
+/** Turn a V4A patch into edits (SPEC section 8). */
 function parseV4a(lines: string[], strict: boolean): PatchEdit[] {
   const n = lines.length;
   const first = lines.findIndex((l) => !isBlank(l));
@@ -919,7 +919,7 @@ function execute(args: string[]): { code: number; out: string[] } {
 
 const trialUrl = process.env.MAKEFUN_ENV_URL;
 if (trialUrl !== undefined && trialUrl !== '') {
-  // A trial: the kit's runner reads the checks from the env and runs this file on each one, without this variable.
+  // A trial run: the kit's runner pulls the checks from the env and drives this file through each one, without this variable.
   const { runTrial } = await import('./runner.ts');
   await runTrial(trialUrl);
 } else {

@@ -1,4 +1,4 @@
-# hidden-spec-cli
+# hidden-spec-cli — mend
 
 [![make.fun · hidden-spec-cli-01-run-20261122 entry](https://make.fun/badge/hidden-spec-cli-01-run-20261122.svg)](https://make.fun/bounty/hidden-spec-cli-01-run-20261122?utm_source=github&utm_medium=readme&utm_campaign=hidden-spec-cli-01-run-20261122)
 [![leaderboard rank](https://make.fun/badge/hidden-spec-cli-01-run-20261122/Royyan20/hidden-spec-cli/rank.svg)](https://make.fun/bounty/hidden-spec-cli-01-run-20261122/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=hidden-spec-cli-01-run-20261122)
@@ -26,7 +26,7 @@ node main.ts patch.diff
 
   It prints every check main.ts gets wrong, with what differed, and the practice score.
 - `SPEC.md`: the specification.
-- `LICENSE`: MIT.
+- `LICENSE`: under the MIT license.
 
 ## What a check is
 

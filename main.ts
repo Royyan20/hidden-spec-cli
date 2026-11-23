@@ -1,16 +1,13 @@
-// mend — one patch tool for every AI edit format, written to SPEC.md.
+// mend: a patch applier.
 //
-// The program reads a patch (unified diff, SEARCH/REPLACE blocks, V4A, or
-// JSON edits), applies it to the tree of text files in the working directory,
-// and writes every change or none. A failed edit is reported on stdout with
-// `error: <code> <path>` and the run exits 1; a malformed patch or bad usage
-// exits 2. The four formats and the three matching tiers are SPEC sections
-// 5 through 9; the command line, output and exit codes are sections 1, 2 and
-// 10. Node 22, standard library only; invoked as `node main.ts [options]
-// [PATCH]`.
+// Point it at a patch and a directory of text files and it carries the
+// patch out: diffs, search-and-replace blocks, V4A, JSON — one tool for
+// all of them. An edit that cannot be placed is reported, not guessed at,
+// and if any edit fails the run changes nothing on disk. Node 22, standard
+// library only; the entry point is `node main.ts [options] [PATCH]`.
 //
-// When the grader runs it with MAKEFUN_ENV_URL set, the tail of this file
-// hands over to runner.ts; leave that hand-over and runner.ts untouched.
+// In a trial the runner drives this file through MAKEFUN_ENV_URL; the
+// hand-over at the bottom and runner.ts stay as they are.
 
 import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync, writeSync } from 'node:fs';
 import { dirname } from 'node:path';

@@ -199,9 +199,10 @@ class WorkTree {
     }
     return false;
   }
-  /** Whether one of `p`'s proper ancestors is a file in the tree as the edits
-   * leave it (on disk, or created by an earlier edit). Creating a file there
-   * must fail with `exists`, not crash the write (ENOTDIR on mkdirSync). */
+  /** Whether some proper ancestor of `p` is a file in the effective tree —
+   * sitting on disk or put there by an earlier edit. A file cannot be
+   * created under a file, so that target fails with `exists` instead of
+   * letting mkdirSync throw ENOTDIR. */
   blockedByFile(p: string): boolean {
     const parts = p.split('/');
     let q = '';
@@ -302,7 +303,7 @@ interface DiffSec {
   create: boolean;
   remove: boolean;
   hunks: DiffHunk[];
-  /** True once a `---`/`+++` pair has named the paths (SPEC section 6: rename from/to name them only when no pair does). */
+  /** Set once a `---`/`+++` pair has supplied the paths; only then do rename from/to lines stop naming them (SPEC section 6). */
   pairSet: boolean;
 }
 
@@ -424,11 +425,12 @@ function parseUnified(lines: string[], strict: boolean): PatchEdit[] {
       const newRaw = hdrPath(lines[i + 1]!);
       const oldP = oldRaw === '/dev/null' ? null : dropAB(oldRaw);
       const newP = newRaw === '/dev/null' ? null : dropAB(newRaw);
-      // A pair names the paths only while the current section has no pair yet
-      // (SPEC section 6: a section starts at a ---/+++ pair "not already part of
-      // a section's header"; the pair that opened the section, or the pair after
-      // a diff --git line, is its header's pair — a further pair before the first
-      // hunk starts a new section instead of overwriting the paths).
+      // The pair only fills in the paths while this section still lacks
+      // one: SPEC section 6 opens a section at a ---/+++ pair that is not
+      // already part of a section header, so the pair that opened it (or
+      // the one right after a diff --git line) is its header pair, and a
+      // later pair before the first hunk begins a fresh section instead
+      // of replacing the paths.
       if (cur !== null && inHeader && !cur.pairSet) {
         cur.oldPath = oldP;
         cur.newPath = newP;
